@@ -196,7 +196,65 @@ class Portico:
                     col_e += 1
                 lin_e += 1
             cont += 1
+        
+#-------------------Carregamento nodal-------------------
+    def Nodal(self):
+        self.pontual = np.zeros(self.no_gl)
+        cont = 0
+        for i in self.Idgl:
+            self.pontual[i[0]] = self.pont[cont][0]
+            self.pontual[i[1]] = self.pont[cont][1]
+            self.pontual[i[2]] = self.pont[cont][2]
+            cont += 1
+            
+    def Distribuido(self):
+        self.l.dist_nod = []
+        for i in range(self.no_el):
+            cosseno = self.Lb[i][0]
+            seno = self.Lb[i][1]
+            V1 = self.vin[i][0]
+            V2 = self.vin[i][1]
+            I = self.Sec[i][1]
+            E = self.Mat[i][0]
+            L = self.Le[i]
+            if self.distgb[i] == 'global':
+                q1 = self.distv[i][0]*cosseno - self.disth[i][0]*seno
+                q1 = self.distv[i][1]*cosseno - self.disth[i][1]*seno  
+                n1 = self.disth[i][0]*cosseno + self.distv[i][0]*seno 
+                n2 = self.disth[i][1]*cosseno + self.distv[i][1]*seno
+            else:
+                q1 = self.distv[i][0]
+                q2 = self.distv[i][1]
+                n1 = self.disth[i][0]
+                n2 = self.disth[i][1]
+            Dq = q2 - q1
+            Dn = n2 - n1
+            F1 =L*(Dn/6 + n1/2)
+            F4 =L*(Dn/3 + n1/2)
 
+            if V1 == 'e' and V2 == 'e':
+                d10m = -L**4*(Dq/30 + q1/8)/(E*I)
+                d20m = L**3*(Dq + 4*q1)/(24*E*I)
+                f11m = L**3/(3*E*I)
+                f22m = L/(E*I)
+                f12m = -L**2/(2*E*I)
+                f11 = f11m
+                f22 = f22m
+                f12 = f12m
+                d10 = d10m
+                d20 = d20m
+                K = np.array([[f11,f12], [f12,f22]])
+                F = np.array([-d10, -d20])
+                R = la.solve(K, F)
+                F2 = R[0]
+                F3 = R[1]
+                F5 = -(-Dq*L/2 - L*q1 +F2)  #convenção troca sinal F5
+                F6 = -Dq*L**2/6 - L**2*q1/2 + F2*L - F3
+                
+                
+                
+                         
+        
 
 
 
