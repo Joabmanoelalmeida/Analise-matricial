@@ -251,6 +251,66 @@ class Portico:
                 F5 = -(-Dq*L/2 - L*q1 +F2)  #convenção troca sinal F5
                 F6 = -Dq*L**2/6 - L**2*q1/2 + F2*L - F3
                 
+            if V1 =='r' and V2 == 'e':
+                d10m = -L**4*(Dq/30 + q1/8)/(E*I)
+                f11m = L**3/(3*E*I)
+                f11 = f11m
+                d10 = d10m
+                F2 = -d10/f11
+                F3 = 0
+                F5 = -(-Dq*L/2 - L*q1 +F2)
+                F6 = -Dq*L**2/6 - L**2*q1/2 + F2*L
+                
+            if V1 =='e' and V2 == 'r':
+                d10m = L**4*(Dq/30 + q2/8)/(E*I)
+                f11m = L**3/(3*E*I)
+                f11 = f11m
+                d10 = d10m
+                F5 = -d10/f11
+                F6 = 0
+                F2 = -Dq*L/2 + L*q2 - F5
+                F3 = -(Dq*L**2/6 - L**2*q2/2 + F5*L) #convenção troca sinal F3
+                
+            if V1 =='r' and V2 == 'r':
+                F2 = q1*L/2 + Dq*L/6
+                F3 = 0
+                F5 = q1*L/2 + Dq*L/3
+                F5 = 0
+                
+#-----------------cargas nodais devido o car, distribuido na sequenecia da Idgl------
+            dist_el = np.array([F1, F2, F3, F4, F5, F6])
+            dist_nod = la.solve(self.Te[i], dist_el)
+            self.l_dist_nod.append(dist_nod)
+        
+        self.distnod = np.zeros(self.no_gl)
+        cont = 0
+        for i in self.incidencia:
+            self.distnod[self.Idgl[[0][0]]] += self.l_dist_nod[cont][0]
+            self.distnod[self.Idgl[[0][1]]] += self.l_dist_nod[cont][1]
+            self.distnod[self.Idgl[[0][2]]] += self.l_dist_nod[cont][2]
+            self.distnod[self.Idgl[[1][0]]] += self.l_dist_nod[cont][3]
+            self.distnod[self.Idgl[[1][1]]] += self.l_dist_nod[cont][4]
+            self.distnod[self.Idgl[[1][2]]] += self.l_dist_nod[cont][5]
+            cont += 1
+    
+    def CalcCarg(self):
+        self.Nodal()
+        self.Distribuido()
+        self.Carregamento()
+    
+    def Carregamento(self):
+        self.carga = np.zeros((self.no_gl, 1))
+        for i in range(self.no_gl):
+            self.carga[i] += self.distnod[i] + self.pontual[i]
+        self.DeslocGlobal()
+        
+        
+            
+    
+    
+                
+                
+                
                 
                 
                          
