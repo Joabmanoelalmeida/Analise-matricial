@@ -305,7 +305,60 @@ class Portico:
         self.DeslocGlobal()
         
         
+#-------------------Deslocamento prescitos nos graus de liberdade restringido -----
+    def DlocPrescrito(self):
+        self.desloc = np.zeros((self.no_gl, 1))
+        cont = 0
+        for i in range(self.no_no):
+            if self.restr[i][0]==1:
+                self.desloc[self.Idgl[i][0]] = self.dloc[i][0]
+                cont =+ 1
+            if self.restr[i][1]==1:
+                self.desloc[self.Idgl[i][1]] = self.dloc[i][1]
+                cont =+ 1   
+            if self.restr[i][2]==1:
+                self.desloc[self.Idgl[i][2]] = self.dloc[i][2]
+                cont =+ 1 
+
+#-------------------Deslocamentos globais nos graus de liberdade livre ----------
+
+    def DeslocGlobal(self):
+        K12 = self.Kg[0:self.gl_fr, self.gl_fr:self.no_gl]  
+        K11 = self.Kg[0:self.gl_fr, 0:self.no_gl]
+        qk = self.carga[self.gl_fr]
+        self.dk = self.desloc[self.gl_fr: self.no_gl]
+        if K11 != []:
+            self.Du = la.solve(K11, qk - np.dot(K12,self.dk))
+        else:
+            self.Du = np.dot(K12, self.dk)
+        cont = 0
+        for i in range(self.no_no):
+            if self.restr[i][0] == 0:
+                self.desloc[self.Idgl[i][0]] = self.Du[cont]
+                cont += 1  
+            if self.restr[i][1] == 0:
+                self.desloc[self.Idgl[i][1]] = self.Du[cont]
+                cont += 1 
+            if self.restr[i][2] == 0:
+                self.desloc[self.Idgl[i][2]] = self.Du[cont]
+                cont += 1    
+           
+        self.RecApoio()
+        self.EsfInterno()
+        
+        
+#------------------Reação de apoio-------------
+
+    def RecApoio(self):
+        K21 = self.Kg[self.gl_fr: self.no_gl, 0: self.gl_fr]
+        K22 = self.Kg[self.gl_fr: self.no_gl, self.gl_fr: self.no_gl]
+        self.Qu = np.dot(K21, self.Du) + np.dot(K22, self.dk)
+        
+        pont_apoio = self.carga[self.gl_fr: self.no_gl]
+        for i in range((self.no_gl-self.gl_fr)):
+            self.Qu[i] += - pont_apoio[i]
             
+
     
     
                 
