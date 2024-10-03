@@ -1,5 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import numpy.linalg as la
+import sympy as sp
 
 class Portico:
     def __init__(self, incidencia, coord, no_no, restr, no_sec, g_sec, sec_el, no_mat, mater, no_el, mat_el, vinc, i_rigido, a_rigido):
@@ -312,13 +314,13 @@ class Portico:
         for i in range(self.no_no):
             if self.restr[i][0]==1:
                 self.desloc[self.Idgl[i][0]] = self.dloc[i][0]
-                cont =+ 1
+                cont += 1
             if self.restr[i][1]==1:
                 self.desloc[self.Idgl[i][1]] = self.dloc[i][1]
-                cont =+ 1   
+                cont += 1   
             if self.restr[i][2]==1:
                 self.desloc[self.Idgl[i][2]] = self.dloc[i][2]
-                cont =+ 1 
+                cont += 1 
 
 #-------------------Deslocamentos globais nos graus de liberdade livre ----------
 
@@ -358,6 +360,86 @@ class Portico:
         for i in range((self.no_gl-self.gl_fr)):
             self.Qu[i] += - pont_apoio[i]
             
+    
+#---------------------Esforço interno-------------------
+
+    def EsfInter(self):
+        cont = 0
+        self.l_De = []
+        self.l_Qi = []
+        for i in self.incidencia:
+            Dix = self.desloc[self.Idgl[i[0][0]]]
+            Diy = self.desloc[self.Idgl[i[0][1]]]
+            Dim = self.desloc[self.Idgl[i[0][2]]]
+            Dfx = self.desloc[self.Idgl[i[1][0]]]
+            Dfy = self.desloc[self.Idgl[i[1][1]]]
+            Dfm = self.desloc[self.Idgl[i[1][2]]]
+            
+            De = np.matrix([Dix, Diy, Dim, Dfx, Dfy, Dfm])
+            self.l_De.append(De)
+            Fi = -1*np.matrix(self.l_dis_nod[cont]).T
+            Qi = self.Te[cont]*self.Ke[cont]*De +self.Te[cont]*Fi
+            self.l_Qi.append(Qi)
+            cont += 1
+        self.Equacoes()
+        
+#-----------------Equações para plotagem dos diagramas --------
+    def Equacoes(self):
+        cont = 0
+        self.Eq = []
+        for i in self.incidencia:
+            A = self.Sec[cont][0]
+            E = self.Mat[cont][0]
+            Ir = 1.
+            if self.i_rigido[cont] == 'ir':
+                ir = 1e10
+            Ar = 1
+            if self.a_rigido[cont] == 'Ar':
+                Ar = 1e10
+            cosseno = self.Lb[cont][0]
+            seno = self.Lb[cont][1]
+            if self.distgb[cont] == 'global':
+                q1 = self.distv[cont][0]*cosseno - self.disth[cont][0]*seno
+                q2 = self.distv[cont][1]*cosseno - self.disth[cont][1]*seno
+                n1 = self.distv[cont][0]*cosseno - self.disth[cont][0]*seno
+                n2 = self.distv[cont][1]*cosseno - self.disth[cont][1]*seno
+            else:
+                q1 = self.distv[cont][0]
+                q2 = self.distv[cont][1]
+                n1 = self.distv[cont][0]
+                n2 = self.distv[cont][1]
+            Dn = (-n2)-(-n1)
+            Dq = (-q2)-(-q1)
+            Ni = self.l_Qi[cont][0]
+            Vi = self.l_Qi[cont][1]
+            Mi = self.l_Qi[cont][2]
+            Di = self.desloc[self.Id_gl[i[0][0]]]*self.Lb[cont][0]-self.desloc[self.Idgl[i[0][0]]]*self.Lb[cont][1]
+            Dix = self.desloc[self.Id_gl[i[0][0]]]*self.Lb[cont][1]+self.desloc[self.Idgl[i[0][0]]]*self.Lb[cont][0]
+            Df = self.desloc[self.Id_gl[i[1][1]]]*self.Lb[cont][0]-self.desloc[self.Idgl[i[1][0]]]*self.Lb[cont][1]
+            C = (((Df/self.Le[cont])-(Di/self.Le[cont]))+((Dq*(self.Le[cont])**3)/120 +((-q1)*(self.Le[cont])**3)/24 - (Vi*(self.Le[cont])**2)/6 + (Mi*(self.Le[cont]))/2)/(self.Mat[cont][0]*self.Sec[cont][1]*Ir))
+            x = sp.symbols('x')
+            q = (Dq/self.Le[cont])*x+(-q1)
+            n = (Dn/self.Le[cont])*x+(-n1)
+            N = sp.integrate(n, x) - Ni
+            # Equação dos deslocamentos horizontal no sistema local
+            Dx = sp.integrate(N,x)/(self.Mat[cont][0]*self.Sec[cont][0]*Ir*Ar) + Dix
+            V = -sp.integrate(q,x) + Vi
+            M = sp.integrate(V,x) - Mi 
+            # Equação do deslocamento local no sistema local
+            Dy = sp.integrate(sp.integrate(M,x),x)/(self.Mat[cont][0]*self.Sec[cont][1]*Ir) + C*x + Di
+            R = sp.diff(Dy, x)
+            Dgx = Dx.self.Lb[cont][0] - Dy*self.Lb[cont][1]
+            Dgy = Dx.self.Lb[cont][1] + Dy*self.Lb[cont][0]
+            self.Eq.append([q, n , N, V, M, R, Dx, Dy, Dgx, Dgy])
+            cont += 1
+        self.Outpout()
+        
+            
+                
+                
+            
+            
+                   
 
     
     
@@ -367,8 +449,6 @@ class Portico:
                 
                 
                          
-        
-
 
 
 if __name__ == "__main__":
@@ -392,9 +472,13 @@ if __name__ == "__main__":
     portico.Id_gl()
     portico.GeomSecao()
     portico.material()
-    portico.calcular_gl()  # Chama o novo método
+    portico.calcular_gl() 
     portico.Rigidez()
-    np.set_printoptions(precision=3)
+    #portico.DlocPrescrito()  # Ensure dloc is defined and set before this
+    #portico.DeslocGlobal()
+    #np.set_printoptions(precision=3)
+    
+    
     print("Matriz de Rigidez Global:", portico.Kg)
 
 
