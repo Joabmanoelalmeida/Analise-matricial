@@ -8,7 +8,6 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.linalg import eigh
 
 class Material:
     def __init__(self, E, A):
@@ -40,29 +39,6 @@ class Barra:
                                      [-self.cos_theta * self.sin_theta, -self.sin_theta**2, self.cos_theta * self.sin_theta, self.sin_theta**2]])
         return k
 
-    def matriz_massa_consistente(self):
-        A = self.material.A
-        L = self.L
-        rho = 1000  # Densidade do material
-        
-        # Massa total da barra
-        m_total = rho * A * L/6
-
-        # Matriz de massa consistente no sistema local
-        m_local = m_total  * np.array([ [2, 0, 1, 0],
-                                        [0, 2, 0, 1],
-                                        [1, 0, 2, 0],
-                                        [0, 1, 0, 2]])
-
-        # Transformação para o sistema global
-        T = np.array([[self.cos_theta, self.sin_theta, 0, 0],
-                      [-self.sin_theta, self.cos_theta, 0, 0],
-                      [0, 0, self.cos_theta, self.sin_theta],
-                      [0, 0, -self.sin_theta, self.cos_theta]])
-
-        m_global = np.dot(np.dot(T.T, m_local), T)
-        return m_global
-
 class Trelica:
     def __init__(self, coord, conect, material, restrs, cargasNos):
         self.coord = coord
@@ -85,14 +61,6 @@ class Trelica:
                 for b in range(4):
                     self.K_global[numero_matriz[a], numero_matriz[b]] += k[a, b]
 
-    def montar_matriz_massa(self):
-        for i in range(self.conect.shape[0]):
-            barra = Barra(self.conect[i, 0], self.conect[i, 1], self.material, self.coord)
-            m = barra.matriz_massa_consistente()
-            numero_matriz = np.array([2 * barra.n1, 2 * barra.n1 + 1, 2 * barra.n2, 2 * barra.n2 + 1])  # Graus de liberdade
-            for a in range(4):
-                for b in range(4):
-                    self.M_global[numero_matriz[a], numero_matriz[b]] += m[a, b]
 
     def montar_vetor_forcas(self):
         total_gdl = self.numGDL
@@ -186,25 +154,6 @@ class Trelica:
         plt.legend()
         plt.show()
 
-    def analise_modal(self):
-        """
-        Realiza a análise modal resolvendo o problema de autovalores e autovetores
-        (K_global - λ M_global) Φ = 0, onde λ são os autovalores e Φ os autovetores.
-        """
-        K_reduzida, _, gdl_livres = self.aplicar_condicoes_contorno()
-
-        # Reduz a matriz de massa
-        M_reduzida = self.M_global[gdl_livres, :][:, gdl_livres]
-
-        # Resolver o problema generalizado de autovalores e autovetores
-        autovalores, autovetores = eigh(K_reduzida, M_reduzida)
-
-        # Frequências naturais (rad/s) e os modos de vibração
-        frequencias_naturais = np.sqrt(autovalores)
-        modos_vibracao = autovetores
-
-        return frequencias_naturais, modos_vibracao
-
 # Exemplo de dados para a treliça
 coord = np.array([[0, 0], [3, 0], [6, 0], [3, 2]])  # Coordenadas dos nós
 conect = np.array([[0, 1], [1, 2], [2, 3], [3, 1], [3, 0]])  # Conexões entre os nós
@@ -229,51 +178,5 @@ print("\nEsforços Normais (em N):")
 for i in range(trelica.conect.shape[0]):
     print(f"Barra {i}: Esforço Normal: {esforcos_normais[i]:.2f} N")
 
-# Análise modal
-frequencias_naturais, modos_vibracao = trelica.analise_modal()
-print("\nFrequências Naturais (rad/s):")
-for i, freq in enumerate(frequencias_naturais):
-    print(f"Modo {i + 1}: {freq:.4f} rad/s")
-    
-frequencias_naturais, modos_vibracao = trelica.analise_modal()
-print("\nModos de vibração:")
-for i, modv in enumerate(modos_vibracao):
-    print(f"Modo {i + 1}: {modv}")
 # Plotagem da treliça
 trelica.plotar_trelica(U, esforcos_normais)
-
-
-def plotar_modos_vibracao(self, modos_vibracao):
-    num_modos = modos_vibracao.shape[1]
-    plt.figure(figsize=(15, 5))
-    
-    for i in range(num_modos):
-        plt.subplot(1, num_modos, i + 1)
-        plt.title(f'Modo {i + 1}')
-        plt.axis('equal')
-        
-        # Cálculo das novas posições dos nós
-        deslocamentos_modos = modos_vibracao[:, i].reshape(-1, 2)
-        posicoes = self.coord + deslocamentos_modos
-        
-        # Plotar as barras
-        for j in range(self.conect.shape[0]):
-            n1 = self.conect[j, 0]
-            n2 = self.conect[j, 1]
-            x_values = [posicoes[n1, 0], posicoes[n2, 0]]
-            y_values = [posicoes[n1, 1], posicoes[n2, 1]]
-            plt.plot(x_values, y_values, 'b-', linewidth=2)
-
-        # Plotar os nós
-        plt.scatter(posicoes[:, 0], posicoes[:, 1], color='r', s=100)  # Plota os nós em vermelho
-        for idx, (x, y) in enumerate(posicoes):
-            plt.text(x, y, f'N{idx}', fontsize=12, ha='right', color='black')
-
-        plt.title(f'Modo {i + 1}')
-        plt.grid()
-    
-    plt.suptitle('Modos de Vibração da Treliça')
-    plt.tight_layout()
-    plt.show()
-    
-    trelica.plotar_modos_vibracao(modos_vibracao)

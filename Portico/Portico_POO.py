@@ -1,7 +1,16 @@
+''' Autor _ JOAB MANOEL ALMEIDA SANTOS
+    Disciplina: Mecânica Computacional das estruturas
+    Professor: Dr. Eduardo Toledo
+    Universidade Federal de Alagoas
+    Mestrando em Estruturas e Materiais 
+    Implementação de Pórtico plano
+'''
+
 import numpy as np
 import matplotlib.pyplot as plt
 import numpy.linalg as la
 import sympy as sp
+
 
 class Portico:
     def __init__(self, incidencia, coord, no_no, restr, no_sec, g_sec, sec_el, no_mat, mater, no_el, mat_el, vinc, i_rigido, a_rigido):
@@ -198,262 +207,10 @@ class Portico:
                     col_e += 1
                 lin_e += 1
             cont += 1
-        
-#-------------------Carregamento nodal-------------------
-    def Nodal(self):
-        self.pontual = np.zeros(self.no_gl)
-        cont = 0
-        for i in self.Idgl:
-            self.pontual[i[0]] = self.pont[cont][0]
-            self.pontual[i[1]] = self.pont[cont][1]
-            self.pontual[i[2]] = self.pont[cont][2]
-            cont += 1
             
-    def Distribuido(self):
-        self.l.dist_nod = []
-        for i in range(self.no_el):
-            cosseno = self.Lb[i][0]
-            seno = self.Lb[i][1]
-            V1 = self.vin[i][0]
-            V2 = self.vin[i][1]
-            I = self.Sec[i][1]
-            E = self.Mat[i][0]
-            L = self.Le[i]
-            if self.distgb[i] == 'global':
-                q1 = self.distv[i][0]*cosseno - self.disth[i][0]*seno
-                q1 = self.distv[i][1]*cosseno - self.disth[i][1]*seno  
-                n1 = self.disth[i][0]*cosseno + self.distv[i][0]*seno 
-                n2 = self.disth[i][1]*cosseno + self.distv[i][1]*seno
-            else:
-                q1 = self.distv[i][0]
-                q2 = self.distv[i][1]
-                n1 = self.disth[i][0]
-                n2 = self.disth[i][1]
-            Dq = q2 - q1
-            Dn = n2 - n1
-            F1 =L*(Dn/6 + n1/2)
-            F4 =L*(Dn/3 + n1/2)
-
-            if V1 == 'e' and V2 == 'e':
-                d10m = -L**4*(Dq/30 + q1/8)/(E*I)
-                d20m = L**3*(Dq + 4*q1)/(24*E*I)
-                f11m = L**3/(3*E*I)
-                f22m = L/(E*I)
-                f12m = -L**2/(2*E*I)
-                f11 = f11m
-                f22 = f22m
-                f12 = f12m
-                d10 = d10m
-                d20 = d20m
-                K = np.array([[f11,f12], [f12,f22]])
-                F = np.array([-d10, -d20])
-                R = la.solve(K, F)
-                F2 = R[0]
-                F3 = R[1]
-                F5 = -(-Dq*L/2 - L*q1 +F2)  #convenção troca sinal F5
-                F6 = -Dq*L**2/6 - L**2*q1/2 + F2*L - F3
-                
-            if V1 =='r' and V2 == 'e':
-                d10m = -L**4*(Dq/30 + q1/8)/(E*I)
-                f11m = L**3/(3*E*I)
-                f11 = f11m
-                d10 = d10m
-                F2 = -d10/f11
-                F3 = 0
-                F5 = -(-Dq*L/2 - L*q1 +F2)
-                F6 = -Dq*L**2/6 - L**2*q1/2 + F2*L
-                
-            if V1 =='e' and V2 == 'r':
-                d10m = L**4*(Dq/30 + q2/8)/(E*I)
-                f11m = L**3/(3*E*I)
-                f11 = f11m
-                d10 = d10m
-                F5 = -d10/f11
-                F6 = 0
-                F2 = -Dq*L/2 + L*q2 - F5
-                F3 = -(Dq*L**2/6 - L**2*q2/2 + F5*L) #convenção troca sinal F3
-                
-            if V1 =='r' and V2 == 'r':
-                F2 = q1*L/2 + Dq*L/6
-                F3 = 0
-                F5 = q1*L/2 + Dq*L/3
-                F5 = 0
-                
-#-----------------cargas nodais devido o car, distribuido na sequenecia da Idgl------
-            dist_el = np.array([F1, F2, F3, F4, F5, F6])
-            dist_nod = la.solve(self.Te[i], dist_el)
-            self.l_dist_nod.append(dist_nod)
-        
-        self.distnod = np.zeros(self.no_gl)
-        cont = 0
-        for i in self.incidencia:
-            self.distnod[self.Idgl[[0][0]]] += self.l_dist_nod[cont][0]
-            self.distnod[self.Idgl[[0][1]]] += self.l_dist_nod[cont][1]
-            self.distnod[self.Idgl[[0][2]]] += self.l_dist_nod[cont][2]
-            self.distnod[self.Idgl[[1][0]]] += self.l_dist_nod[cont][3]
-            self.distnod[self.Idgl[[1][1]]] += self.l_dist_nod[cont][4]
-            self.distnod[self.Idgl[[1][2]]] += self.l_dist_nod[cont][5]
-            cont += 1
-    
-    def CalcCarg(self):
-        self.Nodal()
-        self.Distribuido()
-        self.Carregamento()
-    
-    def Carregamento(self):
-        self.carga = np.zeros((self.no_gl, 1))
-        for i in range(self.no_gl):
-            self.carga[i] += self.distnod[i] + self.pontual[i]
-        self.DeslocGlobal()
-        
-        
-#-------------------Deslocamento prescitos nos graus de liberdade restringido -----
-    def DlocPrescrito(self):
-        self.desloc = np.zeros((self.no_gl, 1))
-        cont = 0
-        for i in range(self.no_no):
-            if self.restr[i][0]==1:
-                self.desloc[self.Idgl[i][0]] = self.dloc[i][0]
-                cont += 1
-            if self.restr[i][1]==1:
-                self.desloc[self.Idgl[i][1]] = self.dloc[i][1]
-                cont += 1   
-            if self.restr[i][2]==1:
-                self.desloc[self.Idgl[i][2]] = self.dloc[i][2]
-                cont += 1 
-
-#-------------------Deslocamentos globais nos graus de liberdade livre ----------
-
-    def DeslocGlobal(self):
-        K12 = self.Kg[0:self.gl_fr, self.gl_fr:self.no_gl]  
-        K11 = self.Kg[0:self.gl_fr, 0:self.no_gl]
-        qk = self.carga[self.gl_fr]
-        self.dk = self.desloc[self.gl_fr: self.no_gl]
-        if K11 != []:
-            self.Du = la.solve(K11, qk - np.dot(K12,self.dk))
-        else:
-            self.Du = np.dot(K12, self.dk)
-        cont = 0
-        for i in range(self.no_no):
-            if self.restr[i][0] == 0:
-                self.desloc[self.Idgl[i][0]] = self.Du[cont]
-                cont += 1  
-            if self.restr[i][1] == 0:
-                self.desloc[self.Idgl[i][1]] = self.Du[cont]
-                cont += 1 
-            if self.restr[i][2] == 0:
-                self.desloc[self.Idgl[i][2]] = self.Du[cont]
-                cont += 1    
-           
-        self.RecApoio()
-        self.EsfInterno()
-        
-        
-#------------------Reação de apoio-------------
-
-    def RecApoio(self):
-        K21 = self.Kg[self.gl_fr: self.no_gl, 0: self.gl_fr]
-        K22 = self.Kg[self.gl_fr: self.no_gl, self.gl_fr: self.no_gl]
-        self.Qu = np.dot(K21, self.Du) + np.dot(K22, self.dk)
-        
-        pont_apoio = self.carga[self.gl_fr: self.no_gl]
-        for i in range((self.no_gl-self.gl_fr)):
-            self.Qu[i] += - pont_apoio[i]
-            
-    
-#---------------------Esforço interno-------------------
-
-    def EsfInter(self):
-        cont = 0
-        self.l_De = []
-        self.l_Qi = []
-        for i in self.incidencia:
-            Dix = self.desloc[self.Idgl[i[0][0]]]
-            Diy = self.desloc[self.Idgl[i[0][1]]]
-            Dim = self.desloc[self.Idgl[i[0][2]]]
-            Dfx = self.desloc[self.Idgl[i[1][0]]]
-            Dfy = self.desloc[self.Idgl[i[1][1]]]
-            Dfm = self.desloc[self.Idgl[i[1][2]]]
-            
-            De = np.matrix([Dix, Diy, Dim, Dfx, Dfy, Dfm])
-            self.l_De.append(De)
-            Fi = -1*np.matrix(self.l_dis_nod[cont]).T
-            Qi = self.Te[cont]*self.Ke[cont]*De +self.Te[cont]*Fi
-            self.l_Qi.append(Qi)
-            cont += 1
-        self.Equacoes()
-        
-#-----------------Equações para plotagem dos diagramas --------
-    def Equacoes(self):
-        cont = 0
-        self.Eq = []
-        for i in self.incidencia:
-            A = self.Sec[cont][0]
-            E = self.Mat[cont][0]
-            Ir = 1.
-            if self.i_rigido[cont] == 'ir':
-                ir = 1e10
-            Ar = 1
-            if self.a_rigido[cont] == 'Ar':
-                Ar = 1e10
-            cosseno = self.Lb[cont][0]
-            seno = self.Lb[cont][1]
-            if self.distgb[cont] == 'global':
-                q1 = self.distv[cont][0]*cosseno - self.disth[cont][0]*seno
-                q2 = self.distv[cont][1]*cosseno - self.disth[cont][1]*seno
-                n1 = self.distv[cont][0]*cosseno - self.disth[cont][0]*seno
-                n2 = self.distv[cont][1]*cosseno - self.disth[cont][1]*seno
-            else:
-                q1 = self.distv[cont][0]
-                q2 = self.distv[cont][1]
-                n1 = self.distv[cont][0]
-                n2 = self.distv[cont][1]
-            Dn = (-n2)-(-n1)
-            Dq = (-q2)-(-q1)
-            Ni = self.l_Qi[cont][0]
-            Vi = self.l_Qi[cont][1]
-            Mi = self.l_Qi[cont][2]
-            Di = self.desloc[self.Id_gl[i[0][0]]]*self.Lb[cont][0]-self.desloc[self.Idgl[i[0][0]]]*self.Lb[cont][1]
-            Dix = self.desloc[self.Id_gl[i[0][0]]]*self.Lb[cont][1]+self.desloc[self.Idgl[i[0][0]]]*self.Lb[cont][0]
-            Df = self.desloc[self.Id_gl[i[1][1]]]*self.Lb[cont][0]-self.desloc[self.Idgl[i[1][0]]]*self.Lb[cont][1]
-            C = (((Df/self.Le[cont])-(Di/self.Le[cont]))+((Dq*(self.Le[cont])**3)/120 +((-q1)*(self.Le[cont])**3)/24 - (Vi*(self.Le[cont])**2)/6 + (Mi*(self.Le[cont]))/2)/(self.Mat[cont][0]*self.Sec[cont][1]*Ir))
-            x = sp.symbols('x')
-            q = (Dq/self.Le[cont])*x+(-q1)
-            n = (Dn/self.Le[cont])*x+(-n1)
-            N = sp.integrate(n, x) - Ni
-            # Equação dos deslocamentos horizontal no sistema local
-            Dx = sp.integrate(N,x)/(self.Mat[cont][0]*self.Sec[cont][0]*Ir*Ar) + Dix
-            V = -sp.integrate(q,x) + Vi
-            M = sp.integrate(V,x) - Mi 
-            # Equação do deslocamento local no sistema local
-            Dy = sp.integrate(sp.integrate(M,x),x)/(self.Mat[cont][0]*self.Sec[cont][1]*Ir) + C*x + Di
-            R = sp.diff(Dy, x)
-            Dgx = Dx.self.Lb[cont][0] - Dy*self.Lb[cont][1]
-            Dgy = Dx.self.Lb[cont][1] + Dy*self.Lb[cont][0]
-            self.Eq.append([q, n , N, V, M, R, Dx, Dy, Dgx, Dgy])
-            cont += 1
-        self.Outpout()
-        
-            
-                
-                
-            
-            
-                   
-
-    
-    
-                
-                
-                
-                
-                
-                         
-
-
 if __name__ == "__main__":
     incidencia = [[0, 1], [1, 2], [2, 3]]
-    coord = [[0, 0], [0, 5], [5, 5], [5, 0]]
+    coord = [[0, 0], [0, 1], [0, 3], [1.5, 3]]
     no_no = 4
     restr = [[1, 1, 1], [1, 1, 1], [0, 0, 0], [0, 0, 0]]  
     no_sec = 1
@@ -479,8 +236,9 @@ if __name__ == "__main__":
     #np.set_printoptions(precision=3)
     
     
-    print("Matriz de Rigidez Global:", portico.Kg)
-
+    print("Matriz de Rigidez Global:")
+    print(np.array2string(portico.Kg, precision=4, suppress_small=True))
+    
 
 #--------------visualização do pórtico-----------------
 # Criar figura
