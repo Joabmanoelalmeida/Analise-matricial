@@ -9,6 +9,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.linalg import eigh
+import json
 
 class Material:
     def __init__(self, E, A):
@@ -43,24 +44,13 @@ class Barra:
     def matriz_massa_consistente(self):
         A = self.material.A
         L = self.L
-        rho = 1000  # Densidade do material
-        
-        # Massa total da barra
+        rho = 1000  
         m_barra = rho * A * L/6
 
-        # Matriz de massa consistente no sistema local
         m_local = m_barra  * np.array([ [2, 0, 1, 0],
                                         [0, 2, 0, 1],
                                         [1, 0, 2, 0],
                                         [0, 1, 0, 2]])
-
-        # Transformação para o sistema global
-        '''T = np.array([[self.cos_theta, self.sin_theta, 0, 0],
-                      [-self.sin_theta, self.cos_theta, 0, 0],
-                      [0, 0, self.cos_theta, self.sin_theta],
-                      [0, 0, -self.sin_theta, self.cos_theta]])
-
-        m_global = np.dot(np.dot(T.T, m_local), T)'''
         return m_local
 
 class Trelica:
@@ -71,25 +61,25 @@ class Trelica:
         self.restrs = restrs
         self.cargasNos = cargasNos
         self.numNos = coord.shape[0]
-        self.numGDL = 2 * self.numNos  # 2 graus de liberdade por nó
+        self.numGDL = 2 * self.numNos  
         self.K_global = np.zeros((self.numGDL, self.numGDL))
-        self.M_global = np.zeros((self.numGDL, self.numGDL))  # Adicionar matriz de massa global
+        self.M_global = np.zeros((self.numGDL, self.numGDL))  
         self.P = self.montar_vetor_forcas()
 
     def montar_matriz_rigidez(self):
         for i in range(self.conect.shape[0]):
             barra = Barra(self.conect[i, 0], self.conect[i, 1], self.material, self.coord)
             k = barra.matriz_rigidez()
-            numero_matriz = np.array([2 * barra.n1, 2 * barra.n1 + 1, 2 * barra.n2, 2 * barra.n2 + 1])  # Graus de liberdade
+            numero_matriz = np.array([2 * barra.n1, 2 * barra.n1 + 1, 2 * barra.n2, 2 * barra.n2 + 1])  
             for a in range(4):
                 for b in range(4):
                     self.K_global[numero_matriz[a], numero_matriz[b]] += k[a, b]
 
     def montar_matriz_massa(self):
-        for i in range(self.conect.shape[0]): #itera sobre self.conect. O self.conect contém as conexões entre os nós do sistema, self.conect.shape[0] retorna o número de  elementos).
+        for i in range(self.conect.shape[0]): 
             barra = Barra(self.conect[i, 0], self.conect[i, 1], self.material, self.coord)
             m = barra.matriz_massa_consistente()
-            numero_matriz = np.array([2 * barra.n1, 2 * barra.n1 + 1, 2 * barra.n2, 2 * barra.n2 + 1])  # Graus de liberdade
+            numero_matriz = np.array([2 * barra.n1, 2 * barra.n1 + 1, 2 * barra.n2, 2 * barra.n2 + 1])  
             for a in range(4):
                 for b in range(4):
                     self.M_global[numero_matriz[a], numero_matriz[b]] += m[a, b]
@@ -100,11 +90,11 @@ class Trelica:
 
         N = 0
         for i in range(self.numNos):
-            for j in range(2):  # Dois graus de liberdade
+            for j in range(2):  
                 if i < self.cargasNos.shape[0] and j < self.cargasNos.shape[1]:
                     P[N] = self.cargasNos[i, j]
                 else:
-                    P[N] = 0  # Atribui 0 se não houver carga
+                    P[N] = 0  
                 N += 1
         return P
 
@@ -113,23 +103,25 @@ class Trelica:
         gdl_livres = np.ones(numGDL, dtype=bool)
 
         for restr in self.restrs:
-            gdl_livres[2 * restr] = False  # Grau de liberdade em x
-            gdl_livres[2 * restr + 1] = False  # Grau de liberdade em y
+            gdl_livres[2 * restr] = False  
+            gdl_livres[2 * restr + 1] = False  
 
         K_reduzida = self.K_global[gdl_livres, :][:, gdl_livres]
+        M_reduzida = self.M_global[gdl_livres, :][:, gdl_livres]
+        print("\nMatriz de Massa Reduzida:\n", np.array2string(M_reduzida, precision=2, suppress_small=True, floatmode='fixed', max_line_width=120))
         P_reduzido = self.P[gdl_livres]
-
-        return K_reduzida, P_reduzido, gdl_livres
+        
+        return K_reduzida, M_reduzida, P_reduzido, gdl_livres
 
     def calcular_deslocamentos(self):
-        self.montar_matriz_rigidez()  # Certificar de que a matriz de rigidez é montada antes de calcular os deslocamentos
-        self.montar_matriz_massa()  # Montar a matriz de massa
+        self.montar_matriz_rigidez() 
+        self.montar_matriz_massa()  
         print("\nMatriz de Rigidez Global:\n", np.array2string(self.K_global, precision=2, suppress_small=True, floatmode='fixed', max_line_width=120))
         print("\nMatriz de Massa Global:\n", np.array2string(self.M_global, precision=2, suppress_small=True, floatmode='fixed', max_line_width=120))
 
-        K_reduzida, P_reduzido, gdl_livres = self.aplicar_condicoes_contorno()
+        K_reduzida, M_reduzida, P_reduzido, gdl_livres = self.aplicar_condicoes_contorno()
         U_reduzida = np.linalg.solve(K_reduzida, P_reduzido)
-
+        print("\nMatriz de Rigidez Reduzida:\n", np.array2string(K_reduzida, precision=2, suppress_small=True, floatmode='fixed', max_line_width=120))
         U = np.zeros(self.K_global.shape[0])
         U[gdl_livres] = U_reduzida
         return U
@@ -150,34 +142,38 @@ class Trelica:
 
     def plotar_trelica(self, U, esforcos_normais):
         plt.figure(figsize=(10, 8))
-        
-        # Plotar as barras
+    
         for i in range(self.conect.shape[0]):
             n1 = self.conect[i, 0]
             n2 = self.conect[i, 1]
+        
             x_values = [self.coord[n1, 0], self.coord[n2, 0]]
             y_values = [self.coord[n1, 1], self.coord[n2, 1]]
-            plt.plot(x_values, y_values, 'b-', linewidth=2)  # Plota a barra em azul
+            plt.plot(x_values, y_values, 'b-', linewidth=2)  
 
-            # Plotar esforços normais nas barras
             centro_x = (self.coord[n1, 0] + self.coord[n2, 0]) / 2
             centro_y = (self.coord[n1, 1] + self.coord[n2, 1]) / 2
-            plt.text(centro_x, centro_y, f'{esforcos_normais[i]:.2f} N', fontsize=10, ha='center', color='purple')
+            plt.text(centro_x, centro_y, f'{esforcos_normais[i]/1000:.2f} KN', fontsize=10, ha='center', color='purple')
 
-        # Plotar os nós
-        plt.scatter(self.coord[:, 0], self.coord[:, 1], color='r', s=100)  # Plota os nós em vermelho
+            deslocamento_n1 = U[2*n1:2*n1+2]
+            deslocamento_n2 = U[2*n2:2*n2+2]
+    
+            x_values_deformados = [self.coord[n1, 0] + deslocamento_n1[0], self.coord[n2, 0] + deslocamento_n2[0]]
+            y_values_deformados = [self.coord[n1, 1] + deslocamento_n1[1], self.coord[n2, 1] + deslocamento_n2[1]]
+
+            plt.plot(x_values_deformados, y_values_deformados, 'r--', linewidth=2)  
+
+        plt.scatter(self.coord[:, 0], self.coord[:, 1], color='r', s=100)  
         for idx, (x, y) in enumerate(self.coord):
             plt.text(x, y, f'N{idx}', fontsize=12, ha='right', color='black')
 
-        # Plotar os deslocamentos
-        deslocamentos = self.coord + U.reshape(-1, 2)  # Adiciona deslocamentos às coordenadas originais
-        plt.scatter(deslocamentos[:, 0], deslocamentos[:, 1], color='g', s=100, label='Deslocamentos')  # Plota os deslocamentos em verde
-        
-        # Plotar as restrições
+        deslocamentos = self.coord + U.reshape(-1, 2)  
+        plt.scatter(deslocamentos[:, 0], deslocamentos[:, 1], color='g', s=100, label='Deslocamentos')  
+    
         for restr in self.restrs:
-            plt.scatter(self.coord[restr, 0], self.coord[restr, 1], color='black', s=100)  # Marca o nó como restrito
-            plt.plot(self.coord[restr, 0], self.coord[restr, 1], '^', color='black', markersize=30)  # Adiciona o triângulo invertido como apoio
-        
+            plt.scatter(self.coord[restr, 0], self.coord[restr, 1], color='black', s=100)  
+            plt.plot(self.coord[restr, 0], self.coord[restr, 1], '^', color='black', markersize=30)  
+    
         plt.title("Treliça 2D com Deslocamentos, Restrições e Esforços Normais")
         plt.xlabel("X")
         plt.ylabel("Y")
@@ -191,29 +187,32 @@ class Trelica:
         Realiza a análise modal resolvendo o problema de autovalores e autovetores
         (K_global - λ M_global) Φ = 0, onde λ são os autovalores e Φ os autovetores.
         """
-        K_reduzida, _, gdl_livres = self.aplicar_condicoes_contorno()
-        M_reduzida = self.M_global[gdl_livres, :][:, gdl_livres]
-        # Resolver o problema generalizado de autovalores e autovetores
+        K_reduzida, M_reduzida, _, _ = self.aplicar_condicoes_contorno()
         autovalores, autovetores = eigh(K_reduzida, M_reduzida)
-        # Frequências naturais (rad/s) e os modos de vibração
         frequencias_naturais = np.sqrt(autovalores)
         modos_vibracao = autovetores / np.linalg.norm(autovetores, axis=0)
         return frequencias_naturais, modos_vibracao
-    
-# Exemplo de dados para a treliça
-coord = np.array([[0, 0], [3, 0], [6, 0], [3, 2]])  # Coordenadas dos nós
-conect = np.array([[0, 1], [1, 2], [2, 3], [3, 1], [3, 0]])  # Conexões entre os nós
-restricao = np.array([0, 2])  # Restrições para cada nó restringe x e y 
-dadosElem = np.array([210e6, 0.007854])  # Dados do material [E(Pa), A(m2)]
-cargasNos = np.array([[0, 0], [0, -50000], [0, 0], [100000, 0]])  # Cargas nodais(N)
 
-# Instanciação do material e da treliça
+def carregar_dados_json(arquivo):
+    with open(arquivo, 'r') as f:
+        dados = json.load(f)
+    
+    coord = np.array(dados['coord'])
+    conect = np.array(dados['conect'])
+    restricao = np.array(dados['restricao'])
+    dadosElem = np.array(dados['material'])
+    cargasNos = np.array(dados['cargasNos'])
+    
+    return coord, conect, restricao, dadosElem, cargasNos
+
+arquivo_json = 'dados_trelica.json' 
+coord, conect, restricao, dadosElem, cargasNos = carregar_dados_json(arquivo_json)
+
 material = Material(dadosElem[0], dadosElem[1])
 trelica = Trelica(coord, conect, material, restricao, cargasNos)
-
-# Cálculo de deslocamentos e esforços
 U = trelica.calcular_deslocamentos()
 esforcos_normais = trelica.calcular_esforcos_normais(U)
+trelica.plotar_trelica(U, esforcos_normais)  
 
 # Impressão dos resultados no terminal
 print("Deslocamentos (em metros):")
@@ -236,4 +235,9 @@ for i, modv in enumerate(modos_vibracao_transposta):
     print(f"Modo {i + 1}: {modv}")
 
 
-trelica.plotar_trelica(U, esforcos_normais)  
+'''# Exemplo de dados para a treliça sem usar o json
+coord = np.array([[0, 0], [3, 0], [6, 0], [3, 2]])  # Coordenadas dos nós
+conect = np.array([[0, 1], [1, 2], [2, 3], [3, 1], [3, 0]])  # Conexões entre os nós
+restricao = np.array([0, 2])  # Restrições para cada nó restringe x e y 
+dadosElem = np.array([210e6, 0.007854])  # Dados do material [E(Pa), A(m2)]
+cargasNos = np.array([[0, 0], [0, -100000], [0, 0], [100000, 0]])  # Cargas nodais(N)'''
